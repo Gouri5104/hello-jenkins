@@ -27,18 +27,14 @@ pipeline {
     }
 
     stage('Run App (demo)') {
-      steps {
-        powershell '''
-          $log = "app.log"
-          # Start Java process and capture PID safely
-          $proc = Start-Process -FilePath "java" -ArgumentList "-cp","target\\classes","com.example.App" -RedirectStandardOutput $log -RedirectStandardError $log -PassThru -WindowStyle Hidden
-          Write-Host "Started App with PID $($proc.Id)"
-          Start-Sleep -Seconds 5
-          # Stop just this process; don't nuke all java.exe instances
-          Stop-Process -Id $proc.Id -Force
-          Write-Host "Stopped App"
-        '''
-      }
+  steps {
+    bat '''
+      for %%f in (target\\*.jar) do (
+        echo Running %%f
+        java -jar "%%f"
+      )
+    '''
+  }
     }
   }
 }
