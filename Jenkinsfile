@@ -1,62 +1,72 @@
 pipeline {
-  agent any
+    agent any
 
-  tools {
-    maven "Maven_3_9"
-
-    jdk 'JDK17'  // Must match exactly the name in Jenkins JDK config
-}
-  options {
-    timestamps()
-  }
-
-  stages {
-    stage('Checkout') {
-      steps { checkout scm }
+    // Define tools
+    tools {
+        jdk 'JDK17'        // Must match the JDK name configured in Jenkins Global Tool Configuration
+        maven 'Maven3'     // Optional: define Maven tool if installed in Jenkins
     }
 
-    stage('Build & Test') {
-      steps {
-        bat 'mvn -B -e -DskipTests=false clean package'
-      }
-      post {
-        always {
-          junit 'target\\surefire-reports\\*.xml'
-          archiveArtifacts artifacts: 'target\\*.jar', fingerprint: true
+    environment {
+        // Force headless mode to prevent GUI issues in Jenkins agent
+        JAVA_TOOL_OPTIONS = "-Djava.awt.headless=true"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                // Checkout from Git
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/Gouri5104/hello-jenkins.git',
+                        credentialsId: 'git-cred'
+                    ]]
+                ])
+            }
         }
-      }
+
+        stage('Build & Test') {
+            steps {
+                // Maven clean, compile, package, run tests
+                bat 'mvn clean package -DskipTests=false'
+            }
+
+            post {
+                // Archive test results for Jenkins reporting
+                always {
+                    junit 'target/surefire-reports/*.xml'
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                }
+            }
+        }
+
+        stage('Run App') {
+            steps {
+                // Run the built JAR safely
+                bat """
+                echo ===== JAVA DIAGNOSTICS =====
+                java -version
+
+                echo ===== RUNNING JAR =====
+                for %%f in (target\\*.jar) do (
+                    echo Running %%f
+                    java -Xint -Djava.awt.headless=true -jar "%%f"
+                )
+                """
+            }
+        }
+
     }
 
-    stage('Run App (demo)') {
-  steps {
-    // Pick the configured JDK tool name as shown in Manage Jenkins → Tools
-    tool name: 'JDK17', type: 'jdk'  // <-- change 'JDK17' to your real name
-    withEnv(["PATH+JAVA=${tool name: 'JDK17', type: 'jdk'}/bin"]) {
-
-      bat '''
-        echo ===== JAVA DIAGNOSTICS =====
-        where java
-        java -version
-
-        echo ===== LIST BUILT JARS =====
-        dir /b target\\*.jar
-
-        echo ===== RUN (with crash logs enabled) =====
-        set JAVA_TOOL_OPTIONS=-XX:+CreateMinidumpOnCrash -XX:ErrorFile=hs_err_pid%p.log
-        for %%f in (target\\*.jar) do (
-          echo Running %%f
-          java -Xlog:os -Xint -Djava.awt.headless=true -jar "%%f"
-        )
-        echo ===== EXIT CODE !ERRORLEVEL! =====
-      '''
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check logs for errors.'
+        }
     }
-  }
-  post {
-    always {
-      archiveArtifacts artifacts: 'hs_err_pid*.log,*.mdmp,**/hs_err_pid*.log', allowEmptyArchive: true
-    }
-  }
-}
-
-  }
 }
