@@ -3,8 +3,9 @@ pipeline {
 
   tools {
     maven "Maven_3_9"
-  }
 
+    jdk 'JDK17'  // Must match exactly the name in Jenkins JDK config
+}
   options {
     timestamps()
   }
